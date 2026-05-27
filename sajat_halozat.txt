@@ -95,6 +95,7 @@ ip dhcp pool VLAN-10-POOL
 exit
 
 ! ==================== ETHERCHANNEL ====================
+! -------------------- Desirable - PAGP /// Active - LACP --------------------
 interface range FastEthernet 0/1 - 2
  description Link to SW2
  channel-group 1 mode active
