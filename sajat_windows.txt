@@ -1,0 +1,19 @@
+! ==================== WINDOWS ====================
+
+! ==================== IP-CÍM ====================
+! -------------------- IP-cím beállítása --------------------
+ncpa.cpl
+
+! ==================== DHCP ====================
+! -------------------- DHCP-szerver authorizálása --------------------
+Server Manager > Tools > DHCP
+A szerveren jobb kattintás > Authorize
+
+! ==================== LEMEZKEZELÉS ====================
+! -------------------- Lemezkezelő megnyitása --------------------
+diskmgmt.msc
+
+! ==================== CSOPORTHÁZIREND FRISSÍTÉSE ====================
+! -------------------- Házirend frissítése kliens PC-n --------------------
+# A parancsot a kliens PC parancssorában kell kiadni.
+gpupdate /force

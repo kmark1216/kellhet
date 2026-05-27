@@ -1,0 +1,197 @@
+! ==================== LINUX ====================
+
+! ==================== APACHE ====================
+! -------------------- Telepítés és alapoldal --------------------
+sudo apt update -y
+sudo apt install apache2 -y
+sudo chmod 777 -R /var/www/html/
+echo "nev" > /var/www/html/index.html
+sudo service apache2 restart
+
+! -------------------- Új virtuális hoszt létrehozása --------------------
+sudo mkdir /var/www/ujoldal
+sudo chmod 777 -R /var/www/ujoldal
+echo "teszt" > /var/www/ujoldal/index.html
+sudo nano /etc/apache2/ports.conf
+    Listen 8080
+
+sudo nano /etc/apache2/sites-available/000-default.conf
+    <VirtualHost *:8080>
+        ServerAdmin admin@localhost
+        DocumentRoot /var/www/ujoldal
+    </VirtualHost>
+
+sudo service apache2 restart
+
+! ==================== WEBDAV (HITELESÍTÉS NÉLKÜL) ====================
+! -------------------- Modulok és könyvtár létrehozása --------------------
+sudo a2enmod dav dav_fs dav_lock
+
+sudo mkdir -p /var/www/webdav
+sudo chown www-data:www-data /var/www/webdav
+
+! -------------------- Apache-beállítás --------------------
+sudo nano /etc/apache2/sites-enabled/000-default.conf
+    DavLockDB /usr/local/apache/var/DavLock
+
+    Alias /webdav /var/www/webdav
+    <Directory /var/www/webdav>
+        DAV On
+        Require all granted
+    </Directory>
+
+sudo service apache2 restart
+
+! ==================== WEBDAV (HITELESÍTÉSSEL) ====================
+! -------------------- Modulok, könyvtárak és felhasználó létrehozása --------------------
+sudo a2enmod dav dav_fs dav_lock auth_digest
+
+sudo mkdir -p /var/www/webdav
+sudo chown www-data:www-data /var/www/webdav
+sudo mkdir -p /usr/local/apache/var/
+sudo chown www-data:www-data /usr/local/apache/var
+sudo touch /usr/local/apache/var/users.password
+sudo chown www-data:www-data /usr/local/apache/var/users.password
+
+sudo htdigest /usr/local/apache/var/users.password "webdav" "user"
+
+! -------------------- Apache-beállítás --------------------
+sudo nano /etc/apache2/sites-enabled/000-default.conf
+    DavLockDB /usr/local/apache/var/DavLock
+
+    Alias /webdav /var/www/webdav
+    <Directory /var/www/webdav>
+        DAV On
+        AuthType Digest
+        AuthName "webdav"
+        AuthUserFile /usr/local/apache/var/users.password
+        Require valid-user
+    </Directory>
+
+sudo service apache2 restart
+
+! ==================== DHCP ====================
+! -------------------- Telepítés és interfész beállítása --------------------
+sudo apt install isc-dhcp-server
+sudo nano /etc/default/isc-dhcp-server
+INTERFACESv4=""
+
+! -------------------- DHCP-tartomány beállítása --------------------
+sudo nano /etc/dhcp/dhcpd.conf
+    subnet 192.168.10.0 netmask 255.255.255.0 {
+        range 192.168.10.10 192.168.10.100;       # Kiosztható IP-cím-tartomány
+        option routers 192.168.10.1;               # Alapértelmezett átjáró
+        option subnet-mask 255.255.255.0;          # Alhálózati maszk
+        option domain-name "umszki.net";           # Helyi domainnév
+        option domain-name-servers 192.168.10.1;   # DNS-szerver címe
+        default-lease-time 600;                    # Alap bérleti idő (mp)
+        max-lease-time 7200;                       # Maximális bérleti idő
+    }
+
+! -------------------- DHCP-címfoglalás --------------------
+    host szamitogep1 {
+        hardware ethernet 00:11:22:33:44:55;      # Azonosító MAC-cím
+        fixed-address 192.168.10.101;             # Statikus IP-cím
+    }
+
+sudo systemctl restart isc-dhcp-server
+sudo systemctl enable isc-dhcp-server
+
+! ==================== DNS ====================
+! -------------------- Telepítés --------------------
+sudo apt update
+sudo apt install dnsmasq
+
+! -------------------- Névfeloldás és dnsmasq beállítása --------------------
+sudo systemctl disable systemd-resolved
+sudo systemctl stop systemd-resolved
+sudo nano /etc/resolv.conf
+    nameserver 192.168.10.1
+
+sudo nano /etc/dnsmasq.conf
+    listen-address=127.0.0.1,192.168.10.1
+    server=10.2.2.2
+    cache-size=150
+    address=/pelda.intra/192.168.99.1
+
+sudo systemctl restart dnsmasq
+sudo systemctl enable dnsmasq
+
+! ==================== NAT ====================
+! -------------------- IP-forwarding engedélyezése --------------------
+sudo nano /etc/sysctl.conf
+    net.ipv4.ip_forward=1
+sudo sysctl -p
+
+! -------------------- Iptables-szabályok --------------------
+sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+sudo iptables -A FORWARD -i eth1 -o eth0 -j ACCEPT
+sudo iptables -A FORWARD -i eth0 -o eth1 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+
+! ==================== BACKUP ====================
+! -------------------- Mentési szkript --------------------
+nano pelda.sh
+#!/bin/bash
+# 1) Hova mentsünk?
+    BACKUP_DIR="/backup"
+# 2) Mit mentsünk?
+    SOURCE_DIR="/home"
+# 3) Dátum, hogy minden mentés külön mappába menjen
+    DATE=$(date +%Y-%m-%d_%H-%M-%S)
+# 4) A mai mentés mappája
+    DEST="$BACKUP_DIR/$DATE"
+    echo "Backup indul..."
+    echo "Forrás: $SOURCE_DIR"
+    echo "Cél: $DEST"
+# 5) Backupmappa létrehozása, ha még nincs
+    sudo mkdir -p "$DEST"
+# 6) Mentés rsync-kel
+    sudo rsync -av "$SOURCE_DIR/" "$DEST/"
+    echo "Backup kész."
+
+chmod +x pelda.sh
+
+! -------------------- Időzített mentés kézzel --------------------
+crontab -e
+*/2 * * * * /usr/bin/rsync -a /home/tanulo/mentenivalomappa /var/backups/
+
+! -------------------- Időzített mentés a mentési szkript futtatásával --------------------
+sudo crontab -e
+*/2 * * * * /home/tanulo/pelda.sh
+
+! ==================== DOCKER ====================
+! -------------------- Docker telepítése --------------------
+sudo apt update -y
+
+sudo apt install ca-certificates curl gnupg -y
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu jammy stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt update
+sudo apt install docker-ce docker-ce-cli containerd.io docker-compose-plugin -y
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER
+# A csoporttagság érvényesítéséhez jelentkezz ki, majd vissza.
+
+! -------------------- Webprojekt létrehozása --------------------
+mkdir -p ~/WebProject
+cd ~/WebProject
+
+nano index.html
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Siker</title>
+</head>
+<body>
+    <h1>Sikerult</h1>
+    <p>Alairas: [A NEVED]</p>
+</body>
+</html>
+
+! -------------------- Apache konténer indítása --------------------
+cd ~
+docker pull httpd:latest
+docker run -d --name webserver -p 80:80 -v ~/WebProject:/usr/local/apache2/htdocs/ httpd:latest
