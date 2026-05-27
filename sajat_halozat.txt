@@ -50,6 +50,7 @@ interface GigabitEthernet 0/1 (vagy 0/1.10)
  switchport mode trunk
  switchport trunk native vlan 1000
  switchport trunk allowed vlan 10,20,30,100,1000
+ switchport nonegotiate
 
 ! ==================== SPANNING TREE ====================
 spanning-tree mode rapid-pvst
