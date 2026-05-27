@@ -124,9 +124,10 @@ sudo nano /etc/sysctl.conf
 sudo sysctl -p
 
 ! -------------------- Iptables-szabályok --------------------
-sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-sudo iptables -A FORWARD -i eth1 -o eth0 -j ACCEPT
-sudo iptables -A FORWARD -i eth0 -o eth1 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+! -------------------- Feltételezés: enp0s8: külső (internet) hálózat, enp0s17: belső hálózat --------------------
+sudo iptables -t nat -A POSTROUTING -o enp0s8 -j MASQUERADE
+sudo iptables -A FORWARD -i enp0s17 -o enp0s8 -j ACCEPT
+sudo iptables -A FORWARD -i enp0s8 -o enp0s17 -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 
 ! ==================== BACKUP ====================
 ! -------------------- Mentési szkript --------------------
